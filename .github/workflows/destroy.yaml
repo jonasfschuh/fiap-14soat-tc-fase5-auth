@@ -1,0 +1,96 @@
+﻿name: Destroy Lambda Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm destruction of all resources'
+        required: true
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_LAMBDA_SOURCE_DIR: ./src/auth-lambda/target/lambda-package
+  TF_IN_AUTOMATION: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "Confirmation failed. Type 'destroy' to continue."
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create minimal lambda source folder for archive_file
+        run: |
+          mkdir -p "${TERRAFORM_LAMBDA_SOURCE_DIR}"
+          echo "placeholder" > "${TERRAFORM_LAMBDA_SOURCE_DIR}/.keep"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.0
+
+      - name: Resolve backend settings
+        run: |
+          echo "TF_STATE_BUCKET_EFFECTIVE=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET || 'fiap-14soat-fase5-jonasfschuh' }}" >> "$GITHUB_ENV"
+          echo "TF_STATE_KEY_EFFECTIVE=${{ vars.TF_STATE_KEY || secrets.TF_STATE_KEY || 'lambda-auth/terraform.tfstate' }}" >> "$GITHUB_ENV"
+
+      - name: Ensure state bucket exists
+        run: |
+          if aws s3api head-bucket --bucket "${TF_STATE_BUCKET_EFFECTIVE}" 2>/dev/null; then
+            echo "State bucket already exists."
+          else
+            aws s3api create-bucket --bucket "${TF_STATE_BUCKET_EFFECTIVE}" --region "${{ env.AWS_REGION }}"
+          fi
+
+          aws s3api put-bucket-versioning --bucket "${TF_STATE_BUCKET_EFFECTIVE}" --versioning-configuration Status=Enabled
+
+      - name: Terraform init
+        working-directory: ./terraform
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET_EFFECTIVE}" \
+            -backend-config="key=${TF_STATE_KEY_EFFECTIVE}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform destroy
+        working-directory: ./terraform
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_lambda_runtime: ${{ vars.LAMBDA_RUNTIME || 'java21' }}
+          TF_VAR_jwt_key: ${{ secrets.JWT_KEY }}
+          TF_VAR_jwt_issuer: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER || 'RaceforceApi' }}
+          TF_VAR_infra_terraform_state_bucket: ${{ env.TF_STATE_BUCKET_EFFECTIVE }}
+          TF_VAR_banco_terraform_state_bucket: ${{ env.TF_STATE_BUCKET_EFFECTIVE }}
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
+          TF_VAR_new_relic_account_id: ${{ secrets.NEW_RELIC_ACCOUNT_ID }}
+          TF_VAR_new_relic_license_key: ${{ secrets.NEW_RELIC_KEY }}
+        run: terraform destroy -input=false -auto-approve
+
+      - name: Clean lambda zip
+        working-directory: ./terraform
+        run: rm -f lambda_function.zip
+
+      - name: Completed
+        run: echo "Lambda infrastructure destroyed successfully"

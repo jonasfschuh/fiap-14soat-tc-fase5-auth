@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Java 21 Lambda for JWT login and authorizer
+
+Globals:
+  Function:
+    Runtime: java21
+    Timeout: 30
+    MemorySize: 512
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        JWT_ISSUER: !Ref JwtIssuer
+        JWT_EXPIRATION_MS: !Ref JwtExpirationMs
+        DB_URL: !Ref DbUrl
+        DB_USER: !Ref DbUser
+        DB_PASSWORD: !Ref DbPassword
+        DB_POOL_SIZE: !Ref DbPoolSize
+
+Parameters:
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT signing secret used by login and authorizer lambdas
+  JwtIssuer:
+    Type: String
+    Default: auth-lambda
+  JwtExpirationMs:
+    Type: Number
+    Default: 86400000
+  DbUrl:
+    Type: String
+    Description: JDBC URL for PostgreSQL
+  DbUser:
+    Type: String
+    Description: PostgreSQL username
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL password
+  DbPoolSize:
+    Type: Number
+    Default: 2
+
+Resources:
+  AuthHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      Auth:
+        DefaultAuthorizer: JwtAuthorizer
+        Authorizers:
+          JwtAuthorizer:
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+            FunctionPayloadType: REQUEST
+            AuthorizerPayloadFormatVersion: 2.0
+            EnableSimpleResponses: true
+            Identity:
+              Headers:
+                - Authorization
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: br.com.fiap.authlambda.handler.LoginHandler::handleRequest
+      Description: Handles POST /auth/login and returns a JWT
+      Environment:
+        Variables:
+          JWT_SECRET: !Ref JwtSecret
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Events:
+        LoginRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthHttpApi
+            Path: /auth/login
+            Method: post
+            Auth:
+              Authorizer: NONE
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: br.com.fiap.authlambda.handler.JwtAuthorizerHandler::handleRequest
+      Description: Validates JWTs for protected routes
+      Environment:
+        Variables:
+          JWT_SECRET: !Ref JwtSecret
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+  ProtectedPingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: br.com.fiap.authlambda.handler.ProtectedHandler::handleRequest
+      Description: Sample protected endpoint
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Events:
+        ProtectedRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AuthHttpApi
+            Path: /protected/ping
+            Method: get
+
+Outputs:
+  AuthApiEndpoint:
+    Description: HTTP API endpoint
+    Value: !Sub 'https://${AuthHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+  LoginFunctionArn:
+    Description: Login Lambda ARN
+    Value: !GetAtt LoginFunction.Arn
+  AuthorizerFunctionArn:
+    Description: Authorizer Lambda ARN
+    Value: !GetAtt AuthorizerFunction.Arn
+

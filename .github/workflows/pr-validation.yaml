@@ -1,0 +1,135 @@
+name: Validar Pull Request
+
+# Trigger: acionado em todo pull request para a branch 'main'
+on:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  JAVA_VERSION: "21"
+  MAVEN_PROJECT_DIR: ./src/auth-lambda
+  TERRAFORM_LAMBDA_SOURCE_DIR: ./src/auth-lambda/target/lambda-package
+  TF_IN_AUTOMATION: true
+  # Opt-in para Node.js 24 (actions/checkout, actions/setup-java e dorny/test-reporter
+  # ainda usam Node.js 20, que será removido em setembro/2026)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read        # necessário para actions/checkout clonar o repositório
+      checks: write         # necessário para dorny/test-reporter publicar o relatório de testes
+      pull-requests: write  # reservado para futuros comentários de cobertura no PR
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Executar build e testes
+        working-directory: ${{ env.MAVEN_PROJECT_DIR }}
+        run: mvn -B -ntp clean verify
+        # Permite que o workflow continue mesmo se os testes falharem,
+        # para que o relatório possa ser publicado
+        continue-on-error: true
+
+      - name: Publicar relatório de testes
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: test-report-auth-lambda
+          path: "${{ env.MAVEN_PROJECT_DIR }}/target/surefire-reports/*.xml"
+          reporter: java-junit
+          # Falha o job se algum teste tiver falhado, garantindo que o PR seja bloqueado
+          fail-on-error: true
+
+  # Validação da infraestrutura Terraform
+  terraform-validation:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar mudancas na pasta terraform
+        id: changes
+        run: |
+          # Usa os SHAs do evento PR para comparação confiável (não depende de refs remotas)
+          CHANGED=$(git diff --name-only \
+            ${{ github.event.pull_request.base.sha }} \
+            ${{ github.event.pull_request.head.sha }} 2>/dev/null || true)
+          if echo "$CHANGED" | grep -q '^terraform/'; then
+            echo "terraform_changed=true" >> $GITHUB_OUTPUT
+            echo "Mudancas detectadas em terraform/:"
+            echo "$CHANGED" | grep '^terraform/'
+          else
+            echo "terraform_changed=false" >> $GITHUB_OUTPUT
+            echo "Sem alteracoes em terraform/ neste PR."
+          fi
+
+      - name: Configurar Java
+        if: steps.changes.outputs.terraform_changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Gerar JAR da Lambda
+        if: steps.changes.outputs.terraform_changed == 'true'
+        working-directory: ${{ env.MAVEN_PROJECT_DIR }}
+        run: mvn -B -ntp clean package
+
+      - name: Preparar pacote da Lambda para Terraform
+        if: steps.changes.outputs.terraform_changed == 'true'
+        working-directory: ${{ env.MAVEN_PROJECT_DIR }}
+        run: |
+          rm -rf ./target/lambda-package
+          mkdir -p ./target/lambda-package/lib
+
+          JAR_PATH=$(find ./target -maxdepth 1 -type f -name "*.jar" ! -name "*sources.jar" ! -name "*javadoc.jar" | head -n 1)
+
+          if [ -z "$JAR_PATH" ]; then
+            echo "Nenhum JAR encontrado em ./target"
+            exit 1
+          fi
+
+          cp "$JAR_PATH" ./target/lambda-package/lib/auth-lambda.jar
+          mvn -B -ntp dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=./target/lambda-package/lib
+
+      - name: Configurar Terraform
+        if: steps.changes.outputs.terraform_changed == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.0
+
+      - name: Inicializar Terraform (sem backend remoto)
+        if: steps.changes.outputs.terraform_changed == 'true'
+        working-directory: ./terraform
+        run: terraform init -backend=false
+
+      - name: Validar configuracao do Terraform
+        if: steps.changes.outputs.terraform_changed == 'true'
+        working-directory: ./terraform
+        run: terraform validate
+
+      - name: Resumo da validacao
+        if: steps.changes.outputs.terraform_changed == 'true'
+        run: echo "Validacao do Terraform concluida com sucesso."
+
+      - name: Nenhuma mudanca na infraestrutura
+        if: steps.changes.outputs.terraform_changed == 'false'
+        run: echo "Sem alteracoes detectadas na pasta terraform/ - pulando validacao do Terraform."
