@@ -1,4 +1,4 @@
-﻿# fiap-14soat-tc-fase5-auth-lambda
+# fiap-14soat-tc-fase5-auth-lambda
 
 ![Java 21](https://img.shields.io/badge/Java_21-%23ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white)
 ![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-%23FF9900.svg?style=for-the-badge&logo=awslambda&logoColor=white)
@@ -28,12 +28,12 @@
 - [🛠️ Tecnologias Utilizadas](#️-tecnologias-utilizadas)
 - [⚙️ Variáveis de Configuração](#️-variáveis-de-configuração)
 - [🔒 Proteção da Branch main](#-proteção-da-branch-main)
+- [🕹️ Deploy Manual](#️-deploy-manual--decisão-de-projeto-aws-academy)
 - [🚀 Execução e Deploy](#-execução-e-deploy)
-- [🔒 Observações de Segurança](#-observações-de-segurança)
+- [🔐 Observações de Segurança](#-observações-de-segurança)
 - [📈 Observabilidade](#-observabilidade)
-- [🔗 Repositórios Relacionados](#-repositórios-relacionados)
-- [🎬 Vídeos de Apresentação](#-vídeos-de-apresentação)
 - [📖 Documentação Técnica](#-documentação-técnica)
+- [🎬 Vídeos de Apresentação](#-vídeos-de-apresentação)
 - [🔗 Repositórios Relacionados](#-repositórios-relacionados)
 
 ---
@@ -44,7 +44,7 @@
 |----------------------|-------------------------|-----------|------------------|-----------------|
 | Jonas Fernando Schuh | jonasschuh@hotmail.com  | rm369458  | jonasf.schuh     | 47 9 9960-1396  |
 
-**Grupo:** 2 — RaceForce · FIAP 14SOAT Fase 5
+**Grupo:** 2 · FIAP 14SOAT Fase 5 — RaceForce
 
 ---
 
@@ -216,24 +216,22 @@ jwt_expiration_ms = 86400000
 
 ## 🔒 Proteção da Branch main
 
-As regras abaixo foram aplicadas em todos os 4 repositórios da stack para atender ao requisito do Tech Challenge:
+As regras abaixo foram aplicadas em todos os repositórios da stack para atender ao requisito do Tech Challenge:
 
 > *"Branch main protegida (sem commits diretos). Uso obrigatório de Pull Requests para merge. Deploy automático das branches de produção."*
 
-### Regras configuradas no GitHub → Settings → Branches
+| Regra | Valor |
+|---|---|
+| **Require a pull request before merging** | ✅ Ativado — bloqueia commits diretos na `main` |
+| **Required approvals** | `1` revisão obrigatória antes do merge (OBS: no caso desse estudo desabilitado que tem 1 pessoa no grupo) |
+| **Dismiss stale reviews on new commits** | ✅ Ativado — revalida aprovação se o PR for atualizado |
+| **Require status checks to pass** | ✅ Ativado — bloqueia merge se o PR Validation falhar |
+| **Require branches to be up to date** | ✅ Ativado — evita merge de branch desatualizada |
+| **Do not allow bypassing** | ✅ Ativado — nem o owner ignora as regras |
 
-| Regra | Valor                                                                                                      |
-|---|------------------------------------------------------------------------------------------------------------|
-| **Require a pull request before merging** | ✅ Ativado — bloqueia commits diretos na `main`                                                             |
-| **Required approvals** | `1` revisão obrigatória antes do merge (OBS: no caso desse estudo desabilitado que tem 1 pessoa no grupo)  |
-| **Dismiss stale reviews on new commits** | ✅ Ativado — revalida aprovação se o PR for atualizado                                                      |
-| **Require status checks to pass** | ✅ Ativado — bloqueia merge se o PR Validation falhar                                                       |
-| **Require branches to be up to date** | ✅ Ativado — evita merge de branch desatualizada                                                            |
-| **Do not allow bypassing** | ✅ Ativado — nem o owner ignora as regras                                                                   |
+### Status checks obrigatórios
 
-### Status checks obrigatórios neste repositório
-
-| Check | Job no `pr-validation.yaml` |
+| Check | Job |
 |---|---|
 | `build-and-test` | Build Maven + testes unitários da Lambda |
 | `terraform-validation` | Valida `terraform init` e `validate` na pasta `terraform/` |
@@ -250,7 +248,7 @@ Os workflows de deploy desta stack utilizam `workflow_dispatch` (disparo manual)
 
 - Cada sessão do AWS Academy possui um limite de **4 horas** de execução ativa;
 - As credenciais (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) expiram ao fim de cada sessão e precisam ser renovadas manualmente;
-- Um trigger automático a cada `push` para `main` **recriaria toda a infraestrutura a cada commit**, consumindo rapidamente o budget de horas disponível e gerando custos desnecessários com recursos provisionados fora do período de uso;
+- Um trigger automático a cada `push` para `main` **recriaria toda a infraestrutura a cada commit**, consumindo rapidamente o budget de horas disponível;
 - A recriação automática de recursos como **Lambda Functions, API Gateway e VPC Link** dentro do ciclo de 4 horas tornaria inviável o uso contínuo da plataforma para demonstração e validação acadêmica.
 
 **O deploy é iniciado manualmente pelo autor** via *GitHub Actions → Run workflow*, garantindo controle total sobre quando os recursos são provisionados e consumindo o budget de forma consciente e responsável.
@@ -269,8 +267,6 @@ Os workflows de deploy desta stack utilizam `workflow_dispatch` (disparo manual)
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.3
 - [AWS CLI](https://aws.amazon.com/cli/) configurado (`aws configure`)
 - RDS PostgreSQL provisionado (repositório `iac-database`) e acessível
-
----
 
 ### Opção A — Deploy via Terraform (CI/CD recomendado)
 
@@ -307,8 +303,6 @@ terraform output api_gateway_endpoint
 terraform destroy
 ```
 
----
-
 ### Opção B — Deploy via AWS SAM (desenvolvimento local)
 
 #### 1. Build e validação
@@ -326,8 +320,6 @@ sam build --template-file template.yaml
 sam deploy --guided --template-file template.yaml
 ```
 
----
-
 ### Testes Unitários
 
 ```bash
@@ -335,20 +327,18 @@ cd src/auth-lambda
 mvn clean test
 ```
 
----
-
 ### Ordem de Deploy da Stack Completa
 
-| # | Repositório                                 | Descrição |
-|---|---------------------------------------------|-----------|
-| 1 | fiap-14soat-tc-fase5-iac-terraform          | VPC, EKS, NLB, S3, IAM |
-| 2 | fiap-14soat-tc-fase5-iac-database           | RDS PostgreSQL |
+| # | Repositório | Descrição |
+|---|-------------|-----------|
+| 1 | fiap-14soat-tc-fase5-iac-terraform | VPC, EKS, NLB, S3, IAM |
+| 2 | fiap-14soat-tc-fase5-iac-database | RDS PostgreSQL |
 | 3 | **fiap-14soat-tc-fase5-auth-lambda** ← este | Lambda Login + Authorizer + API Gateway |
-| 4 | fiap-14soat-tc-fase5-app-k8s               | Aplicação + manifests K8s |
+| 4 | fiap-14soat-tc-fase5-app-k8s | Aplicação + manifests K8s |
 
 ---
 
-## 🔒 Observações de Segurança
+## 🔐 Observações de Segurança
 
 - **Nunca** comite `JWT_SECRET`, `DB_PASSWORD` ou `jwt_key` em texto puro no repositório;
 - Em produção, injete segredos via **AWS Secrets Manager** ou **SSM Parameter Store**;
@@ -378,17 +368,6 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 | `auth_login_success_total` | Total de logins bem-sucedidos |
 | `auth_login_failure_total` | Total de logins falhos (com dimensão `reason`) |
 | `auth_token_issued_total` | Total de tokens JWT emitidos |
-
----
-
-## 🔗 Repositórios Relacionados
-
-| Repositório                                                                                              | Descrição |
-|----------------------------------------------------------------------------------------------------------|-----------|
-| [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | VPC, EKS, NLB — infraestrutura base |
-| [fiap-14soat-tc-fase5-iac-database](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-database)    | RDS PostgreSQL |
-| [fiap-14soat-tc-fase5-auth-lambda](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda)      | **Este repositório** — Lambda Auth + API Gateway |
-| [fiap-14soat-tc-fase5-app-k8s](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-app-k8s)              | Aplicação Spring Boot + manifests K8s |
 
 ---
 
@@ -436,33 +415,45 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
   "status": "UP"
 }
 ```
+
 ---
 
-### 🎬 Vídeos de Apresentação
+## 🎬 Vídeos de Apresentação
 
 | Fase | Link |
 |------|------|
-| Fase 1  | [Apresentação Tech Challenge 1 — RaceForce](https://youtu.be/EKwE8l4yE1M) |
-| Fase 2  | [Apresentação Tech Challenge 2 — RaceForce](https://youtu.be/95ml0-H9Vf4) |
-| Fase 3  | [Apresentação Tech Challenge 3 — RaceForce](https://www.youtube.com/watch?v=KB-FC_4zsPE) |
-| Fase 4  | [Apresentação Tech Challenge 4 — RaceForce](https://www.youtube.com/watch?v=vR3x4kW0l90) |
-| Fase 5  | *(em breve)* |
+| Fase 1 | [Apresentação Tech Challenge 1 — RaceForce](https://youtu.be/EKwE8l4yE1M) |
+| Fase 2 | [Apresentação Tech Challenge 2 — RaceForce](https://youtu.be/95ml0-H9Vf4) |
+| Fase 3 | [Apresentação Tech Challenge 3 — RaceForce](https://www.youtube.com/watch?v=KB-FC_4zsPE) |
+| Fase 4 | [Apresentação Tech Challenge 4 — RaceForce](https://www.youtube.com/watch?v=vR3x4kW0l90) |
+| Fase 5 | *(em breve)* |
 
 ---
 
 ## 🔗 Repositórios Relacionados
 
-
-| Ordem | Repositório                                                                                               | Descrição                                |
-|-------|-----------------------------------------------------------------------------------------------------------|------------------------------------------|
-| 1     | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform)   | VPC, EKS, NLB, SQS — infraestrutura base |
-| 2     | [fiap-14soat-tc-fase5-auth-lambda](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda)       | Lambda Login + Authorizer + API Gateway  |
-| 3     | [fiap-14soat-tc-fase5-customer](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-customer)             | Microserviço Customer                    |
-| 4     | [fiap-14soat-tc-fase5-vehicle](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-vehicle)               | Microserviço Vehicle                     |
-| 5     | [fiap-14soat-tc-fase5-stocks](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-stocks)                 | Microserviço Stocks                      |
-| 6     | [fiap-14soat-tc-fase5-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service)               | Microserviço Service                     |
-| 7     | [fiap-14soat-tc-fase5-purchase-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-purchase-order) | Microserviço Purchase Order              |
-| 8     | [fiap-14soat-tc-fase5-billing](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-billing)               | Microserviço Billing                     |
-| 9     | [fiap-14soat-tc-fase5-service-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service-order)   | Microserviço Service Order               |
+| Ordem | Repositório | Descrição |
+|-------|-------------|-----------|
+| 1 | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | VPC, EKS, NLB, S3, IAM — infraestrutura base |
+| 2 | [fiap-14soat-tc-fase5-iac-database](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-database) | RDS PostgreSQL |
+| 3 | [fiap-14soat-tc-fase5-auth-lambda](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda) | **Este repositório** — Lambda Login + Authorizer + API Gateway |
+| 4 | [fiap-14soat-tc-fase5-customer](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-customer) | Microserviço Customer |
+| 5 | [fiap-14soat-tc-fase5-vehicle](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-vehicle) | Microserviço Vehicle |
+| 6 | [fiap-14soat-tc-fase5-stocks](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-stocks) | Microserviço Stocks |
+| 7 | [fiap-14soat-tc-fase5-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service) | Microserviço Service |
+| 8 | [fiap-14soat-tc-fase5-purchase-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-purchase-order) | Microserviço Purchase Order |
+| 9 | [fiap-14soat-tc-fase5-billing](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-billing) | Microserviço Billing |
+| 10 | [fiap-14soat-tc-fase5-service-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service-order) | Microserviço Service Order |
+| 11 | [fiap-14soat-tc-fase5-app-k8s](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-app-k8s) | Aplicação Spring Boot + manifests K8s |
 
 ---
+
+<div align="center">
+
+**🎓 Desenvolvido para o Tech Challenge FIAP 14SOAT — Fase 5**
+
+*Projeto Acadêmico — Pós-Graduação em Arquitetura de Software · FIAP 2025/2026*
+
+[⬆ Voltar ao topo](#fiap-14soat-tc-fase5-auth-lambda)
+
+</div>
