@@ -1,153 +1,153 @@
-﻿name: Deploy Lambda to AWS
+﻿name: Build, Test & Deploy - Auth Service
 
 on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
-  JAVA_VERSION: "25"
-  MAVEN_PROJECT_DIR: ./src/auth-lambda
-  TERRAFORM_LAMBDA_SOURCE_DIR: ./src/auth-lambda/target/lambda-package
-  TF_IN_AUTOMATION: true
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  APP_NAME: auth-api # Nome logico usado nas labels e diagnosticos.
+  K8S_DEPLOYMENT: auth-api # Mesmo nome do metadata.name do Deployment.
+  K8S_NAMESPACE: fiapx
+  IMAGE_NAME: auth-api # Imagem local construida no Docker Desktop.
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy Lambda
+  build-and-test:
+    name: 1. Build e Testes
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
+    outputs:
+      tests_total: ${{ steps.metrics.outputs.tests_total }}
+      tests_success: ${{ steps.metrics.outputs.tests_success }}
+      tests_failures: ${{ steps.metrics.outputs.tests_failures }}
+      coverage_pct: ${{ steps.metrics.outputs.coverage_pct }}
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configurar Java
+      - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: '21'
           cache: maven
 
-      - name: Build da aplicacao Java
-        working-directory: ${{ env.MAVEN_PROJECT_DIR }}
-        run: mvn -B -ntp clean package
+      - name: Garantir permissao do Maven Wrapper
+        run: chmod +x ./mvnw
 
-      - name: Preparar pacote da Lambda para Terraform
-        working-directory: ${{ env.MAVEN_PROJECT_DIR }}
-        run: |
-          rm -rf ./target/lambda-package
-          mkdir -p ./target/lambda-package/lib
-
-          JAR_PATH=$(find ./target -maxdepth 1 -type f -name "*.jar" ! -name "*sources.jar" ! -name "*javadoc.jar" | head -n 1)
-
-          if [ -z "$JAR_PATH" ]; then
-            echo "Nenhum JAR encontrado em ./target"
-            exit 1
-          fi
-
-          cp "$JAR_PATH" ./target/lambda-package/lib/auth-lambda.jar
-          mvn -B -ntp dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=./target/lambda-package/lib
-
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Validar secrets obrigatorios
+      - name: Build e Testes
+        run: ./mvnw -B -ntp clean verify
         env:
-          JWT_KEY_VALUE: ${{ secrets.JWT_KEY }}
-          DB_PASSWORD_VALUE: ${{ secrets.DB_PASSWORD }}
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Coletar metricas de qualidade
+        id: metrics
         run: |
-          set -euo pipefail
-          if [ -z "${JWT_KEY_VALUE}" ]; then
-            echo "Erro: secret JWT_KEY nao definido (ou vazio)."
-            exit 1
-          fi
-          if [ -z "${DB_PASSWORD_VALUE}" ]; then
-            echo "Erro: secret DB_PASSWORD nao definido (ou vazio)."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+          test_files = glob.glob('**/target/surefire-reports/*.xml', recursive=True)
+          total = failures = skipped = 0
+          for f in test_files:
+              try:
+                  root = ET.parse(f).getroot()
+                  items = [root] if root.tag == 'testsuite' else root.findall('testsuite')
+                  for s in items:
+                      total += int(s.attrib.get('tests',0) or 0)
+                      failures += int(s.attrib.get('failures',0) or 0) + int(s.attrib.get('errors',0) or 0)
+                      skipped += int(s.attrib.get('skipped',0) or 0)
+              except: pass
+          for f in glob.glob('**/target/cucumber-reports/cucumber.xml', recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+                  total += int(root.attrib.get('tests',0) or 0)
+                  failures += int(root.attrib.get('failures',0) or 0)
+              except: pass
+          success = max(total - failures - skipped, 0)
+          covered = missed = 0
+          for f in glob.glob('**/target/site/jacoco/jacoco.xml', recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+                  for c in root.findall(".//counter[@type='LINE']"):
+                      covered += int(c.attrib.get('covered',0) or 0)
+                      missed += int(c.attrib.get('missed',0) or 0)
+              except: pass
+          coverage = (covered/(covered+missed)*100) if covered+missed>0 else 0.0
+          with open(os.environ['GITHUB_OUTPUT'],'a') as fh:
+              fh.write(f"tests_total={total}\ntests_success={success}\ntests_failures={failures}\ncoverage_pct={coverage:.2f}\n")
+          print(f"Tests: {total} total, {success} ok, {failures} fail | Coverage: {coverage:.2f}%")
+          PY
 
-      - name: Configurar Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.10.0
-
-      - name: Resolver configuracao de backend
-        run: |
-          echo "TF_STATE_BUCKET_EFFECTIVE=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET || 'fiap-14soat-fase5-jonasfschuh' }}" >> "$GITHUB_ENV"
-          echo "TF_STATE_KEY_EFFECTIVE=${{ vars.TF_STATE_KEY || secrets.TF_STATE_KEY || 'lambda-auth/terraform.tfstate' }}" >> "$GITHUB_ENV"
-
-      - name: Garantir bucket de state
-        run: |
-          if aws s3api head-bucket --bucket "${TF_STATE_BUCKET_EFFECTIVE}" 2>/dev/null; then
-            echo "Bucket de state ja existe."
-          else
-            aws s3api create-bucket --bucket "${TF_STATE_BUCKET_EFFECTIVE}" --region "${{ env.AWS_REGION }}"
-          fi
-
-          aws s3api put-bucket-versioning --bucket "${TF_STATE_BUCKET_EFFECTIVE}" --versioning-configuration Status=Enabled
-
-      - name: Inicializar Terraform
-        working-directory: ./terraform
-        run: |
-          terraform init -reconfigure \
-            -backend-config="bucket=${TF_STATE_BUCKET_EFFECTIVE}" \
-            -backend-config="key=${TF_STATE_KEY_EFFECTIVE}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-
-      - name: Validar Terraform
-        working-directory: ./terraform
-        run: terraform validate
-
-      - name: Planejar Terraform
-        working-directory: ./terraform
-        env:
-          TF_VAR_aws_region: ${{ env.AWS_REGION }}
-          TF_VAR_lambda_runtime: ${{ vars.LAMBDA_RUNTIME || 'java21' }}
-          TF_VAR_enable_lambda_authorizer: ${{ vars.ENABLE_LAMBDA_AUTHORIZER || 'true' }}
-          TF_VAR_jwt_key: ${{ secrets.JWT_KEY }}
-          TF_VAR_jwt_issuer: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER || 'RaceforceApi' }}
-          TF_VAR_infra_terraform_state_bucket: ${{ env.TF_STATE_BUCKET_EFFECTIVE }}
-          TF_VAR_banco_terraform_state_bucket: ${{ env.TF_STATE_BUCKET_EFFECTIVE }}
-          TF_VAR_customer_db_state_key: ${{ vars.CUSTOMER_DB_STATE_KEY || 'customer/database/terraform.tfstate' }}
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-          TF_VAR_new_relic_account_id: ${{ secrets.NEW_RELIC_ACCOUNT_ID }}
-          TF_VAR_new_relic_license_key: ${{ secrets.NEW_RELIC_KEY }}
-        run: terraform plan -input=false -out=tfplan
-
-      - name: Aplicar Terraform
-        working-directory: ./terraform
-        run: terraform apply -input=false -auto-approve tfplan
-
-      - name: Publicar endpoint oficial no summary
+      - name: Upload artefatos de cobertura
+        uses: actions/upload-artifact@v4
         if: always()
-        working-directory: ./terraform
-        run: |
-          OFFICIAL_ENDPOINT=""
-          OFFICIAL_ENDPOINT=$(terraform output -raw api_gateway_official_endpoint 2>/dev/null || true)
-          if [ -z "${OFFICIAL_ENDPOINT}" ]; then
-            OFFICIAL_ENDPOINT=$(terraform output -raw api_gateway_endpoint 2>/dev/null || true)
-          fi
+        with:
+          name: coverage-reports
+          path: |
+            **/target/site/jacoco/
+            **/target/cucumber-reports/
 
+  deploy:
+    name: 2. Build Docker & Deploy K8s Local
+    runs-on: self-hosted
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
+
+      - name: Garantir namespace fiapx
+        run: kubectl get namespace ${{ env.K8S_NAMESPACE }} >/dev/null 2>&1 || kubectl create namespace ${{ env.K8S_NAMESPACE }}
+
+      - name: Deploy no Kubernetes (Docker Desktop)
+        run: kubectl apply -f k8s/ -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Aguardar rollout
+        run: kubectl rollout restart deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }} && kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }} --timeout=180s
+
+      - name: Diagnostico em caso de falha
+        if: failure()
+        run: |
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} || true
+          kubectl describe pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} || true
+          for pod in $(kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "===== Logs: $pod =====" && kubectl logs "$pod" -n ${{ env.K8S_NAMESPACE }} --tail=100 || true
+          done
+
+  summary:
+    name: 3. Sumario
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build-and-test, deploy]
+    steps:
+      - name: Publicar resumo
+        env:
+          BUILD_RESULT: ${{ needs.build-and-test.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          TESTS_TOTAL: ${{ needs.build-and-test.outputs.tests_total }}
+          TESTS_SUCCESS: ${{ needs.build-and-test.outputs.tests_success }}
+          TESTS_FAILURES: ${{ needs.build-and-test.outputs.tests_failures }}
+          COVERAGE_PCT: ${{ needs.build-and-test.outputs.coverage_pct }}
+        run: |
           {
-            echo "## Deploy Auth-Lambda"
+            echo "## Deploy - Auth Service"
+            echo "| Etapa | Resultado |"
+            echo "|---|---|"
+            echo "| Build & Testes | ${BUILD_RESULT} |"
+            echo "| Deploy K8s Local | ${DEPLOY_RESULT} |"
             echo ""
-            if [ -n "${OFFICIAL_ENDPOINT}" ]; then
-              echo "- Endpoint oficial: ${OFFICIAL_ENDPOINT}"
-              echo "- Health check sugerido: ${OFFICIAL_ENDPOINT%/}/healthz"
-              echo "- Login oficial (POST): ${OFFICIAL_ENDPOINT%/}/auth/login"
-              echo "- Observability check (logs): cpf, authResult, reason, latencyMs, correlationId"
-              echo "- Observability check (metrics): auth_login_success_total, auth_login_failure_total{reason}, auth_token_issued_total"
-            else
-              echo "- Endpoint oficial: nao disponivel neste run (verifique etapas de plan/apply)."
-              echo "- Login oficial esperado (POST): <api-gateway-endpoint>/auth/login"
-              echo "- Observability check (metrics): validar no CloudWatch/New Relic apos obter endpoint."
-            fi
+            echo "### Qualidade"
+            echo "- Testes: ${TESTS_TOTAL:-n/a} total, ${TESTS_SUCCESS:-n/a} ok, ${TESTS_FAILURES:-n/a} falhas"
+            echo "- Cobertura (LINE): ${COVERAGE_PCT:-n/a}%"
+            echo ""
+            echo "### Acesso local"
+            echo "- Swagger: http://localhost/auth/swagger-ui.html"
+            echo "- Health: http://localhost/auth/actuator/health"
           } >> "$GITHUB_STEP_SUMMARY"
+

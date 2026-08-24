@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+  namespace: fiapx
+data:
+  SERVER_PORT: "8090"
+  JWT_EXPIRATION_MS: "86400000"
+  JWT_ISSUER: "auth-service"
+  SPRING_PROFILES_ACTIVE: "k8s"
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: "org.postgresql.Driver"
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "none"
+  SPRING_FLYWAY_ENABLED: "true"
+  SPRING_FLYWAY_LOCATIONS: "classpath:db/migration"
+  SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,metrics,prometheus"
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
+  LOGGING_LEVEL_ROOT: "INFO"

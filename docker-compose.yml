@@ -1,0 +1,57 @@
+version: '3.8'
+name: ms-auth
+
+services:
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5430:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  auth-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth-api
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SERVER_PORT: 8090
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production-min-32-chars}
+      JWT_EXPIRATION_MS: 86400000
+      JWT_ISSUER: auth-service
+    ports:
+      - "8090:8090"
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+    networks:
+      - app-network
+      - fiap-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+  fiap-network:
+    external: true
+    name: fiap-network
+
+volumes:
+  postgres-auth-data:

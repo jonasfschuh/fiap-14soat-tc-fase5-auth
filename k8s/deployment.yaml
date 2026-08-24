@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-api
+  namespace: fiapx
+  labels:
+    app: auth-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-api
+  template:
+    metadata:
+      labels:
+        app: auth-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8090"
+    spec:
+      containers:
+        - name: auth-api
+          image: auth-api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8090
+          env:
+            - name: SERVER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SERVER_PORT
+            - name: JWT_EXPIRATION_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: JWT_EXPIRATION_MS
+            - name: JWT_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: JWT_ISSUER
+            - name: SPRING_PROFILES_ACTIVE
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_PROFILES_ACTIVE
+            - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_JPA_HIBERNATE_DDL_AUTO
+            - name: SPRING_FLYWAY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_FLYWAY_ENABLED
+            - name: SPRING_FLYWAY_LOCATIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_FLYWAY_LOCATIONS
+            - name: SPRING_FLYWAY_BASELINE_ON_MIGRATE
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SPRING_FLYWAY_BASELINE_ON_MIGRATE
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+            - name: MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+            - name: LOGGING_LEVEL_ROOT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: LOGGING_LEVEL_ROOT
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: JWT_SECRET
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth-secret
+                  key: SPRING_DATASOURCE_URL
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth-secret
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth-secret
+                  key: SPRING_DATASOURCE_PASSWORD
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8090
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8090
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6

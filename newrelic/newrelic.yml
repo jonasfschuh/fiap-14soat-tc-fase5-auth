@@ -1,0 +1,42 @@
+common: &default_settings
+
+  # License key injetada via variável de ambiente NEW_RELIC_LICENSE_KEY
+  license_key: ${NEW_RELIC_LICENSE_KEY}
+
+  app_name: auth-ms
+
+  # ── Distributed Tracing ────────────────────────────────────────────────────
+  distributed_tracing:
+    enabled: true
+
+  log_level: info
+
+  # ── Logs in Context ────────────────────────────────────────────────────────
+  application_logging:
+    enabled: true
+    forwarding:
+      enabled: true
+      max_samples_stored: 10000
+      log_level: INFO
+    metrics:
+      enabled: true
+    local_decorating:
+      enabled: false
+
+  # ── Transaction Tracer ─────────────────────────────────────────────────────
+  transaction_tracer:
+    enabled: true
+    transaction_threshold: apdex_f
+    record_sql: obfuscated
+
+  # ── Error Collector ────────────────────────────────────────────────────────
+  error_collector:
+    enabled: true
+    ignore_status_codes: 404
+
+  # ── JVM Metrics ────────────────────────────────────────────────────────────
+  jvm_metrics:
+    enabled: true
+
+production:
+  <<: *default_settings
