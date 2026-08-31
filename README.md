@@ -1,22 +1,20 @@
-# fiap-14soat-tc-fase5-auth-lambda
+﻿# fiap-14soat-tc-fase5-auth
 
 ![Java 21](https://img.shields.io/badge/Java_21-%23ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white)
-![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-%23FF9900.svg?style=for-the-badge&logo=awslambda&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3-%236DB33F.svg?style=for-the-badge&logo=springboot&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT_HS256-%23000000.svg?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazonwebservices&logoColor=white)
-![API Gateway](https://img.shields.io/badge/API_Gateway-%23FF4F8B.svg?style=for-the-badge&logo=amazonapigateway&logoColor=white)
-![Amazon S3](https://img.shields.io/badge/Amazon_S3-%23569A31.svg?style=for-the-badge&logo=amazons3&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform_%7E6.0-%235835CC.svg?style=for-the-badge&logo=terraform&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-%232496ED.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-%23326CE5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Flyway](https://img.shields.io/badge/Flyway-%23CC0200.svg?style=for-the-badge&logo=flyway&logoColor=white)
 ![New Relic](https://img.shields.io/badge/New_Relic-%231CE783.svg?style=for-the-badge&logo=newrelic&logoColor=white)
-![Serverless](https://img.shields.io/badge/Serverless-Architecture-FD5750?style=for-the-badge)
 ![Zero Trust](https://img.shields.io/badge/Zero_Trust-Auth-1A1A2E?style=for-the-badge)
 ![DDD](https://img.shields.io/badge/Domain--Driven_Design-430098?style=for-the-badge)
 ![JUnit 5](https://img.shields.io/badge/JUnit_5-%2325A162.svg?style=for-the-badge&logo=junit5&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
 ![Maven](https://img.shields.io/badge/Apache_Maven-%23C71A36.svg?style=for-the-badge&logo=apachemaven&logoColor=white)
 
-[![Deploy](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda/actions/workflows/deploy.yaml/badge.svg?branch=main)](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda/actions/workflows/deploy.yaml)
+[![PR Validation](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda/actions/workflows/pr-validation.yaml/badge.svg?branch=main)](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda/actions/workflows/pr-validation.yaml)
 
 ---
 
@@ -28,7 +26,6 @@
 - [🛠️ Tecnologias Utilizadas](#️-tecnologias-utilizadas)
 - [⚙️ Variáveis de Configuração](#️-variáveis-de-configuração)
 - [🔒 Proteção da Branch main](#-proteção-da-branch-main)
-- [🕹️ Deploy Manual](#️-deploy-manual--decisão-de-projeto-aws-academy)
 - [🚀 Execução e Deploy](#-execução-e-deploy)
 - [🔐 Observações de Segurança](#-observações-de-segurança)
 - [📈 Observabilidade](#-observabilidade)
@@ -50,14 +47,14 @@
 
 ## 📋 Descrição
 
-Este repositório implementa a **camada de autenticação serverless** da plataforma RaceForce, utilizando **AWS Lambda** (Java 21) integrado ao **AWS API Gateway HTTP API v2**.
+Este repositório implementa a **camada de autenticação** da plataforma RaceForce como uma aplicação **Spring Boot 3** (Java 21), executada localmente via Docker Compose ou dentro de um **cluster Kubernetes local**.
 
-Contém duas funções Lambda distintas e toda a infraestrutura associada provisionada via **Terraform**:
+Expõe dois endpoints principais:
 
-| Função | Handler | Responsabilidade |
-|--------|---------|------------------|
-| **LoginHandler** | `br.com.fiap.authlambda.handler.LoginHandler::handleRequest` | Autentica usuário por CPF/senha no PostgreSQL e emite token **JWT HS256** |
-| **JwtAuthorizerHandler** | `br.com.fiap.authlambda.handler.JwtAuthorizerHandler::handleRequest` | Valida o JWT Bearer em todas as rotas protegidas do API Gateway |
+| Endpoint | Responsabilidade |
+|----------|-----------------|
+| `POST /auth/login` | Autentica usuário por CPF/senha no PostgreSQL e emite token **JWT HS256** |
+| `GET /healthz` | Health check da aplicação |
 
 ### Regras de Autenticação
 
@@ -66,27 +63,22 @@ Contém duas funções Lambda distintas e toda a infraestrutura associada provis
 3. Senha padrão para clientes = **primeiros 3 dígitos do CPF**;
 4. Retorna role `ADMIN` para usuários administrativos ou `USER` para demais.
 
-### Rotas do API Gateway
+### Rotas
 
 | Grupo | Rotas | Autenticação |
 |-------|-------|--------------|
 | Públicas | `POST /auth/login`, `GET /healthz` | Nenhuma |
-| Protegidas | `/customer`, `/vehicle`, `/service`, `/product`, `GET /service-order` | **JWT Bearer obrigatório** |
-| Catch-all | `ANY /{proxy+}` | Nenhuma (fallback para EKS) |
+| Protegidas | `/customer`, `/vehicle`, `/service`, `/product`, `GET /service-order` | **JWT Bearer** |
 
-> ℹ️ Este repositório **não** inclui a aplicação Spring Boot, o banco de dados nem a infraestrutura Kubernetes — cada um possui seu próprio repositório (ver seção [Repositórios Relacionados](#-repositórios-relacionados)).
+> ℹ️ Este repositório **não** inclui a aplicação principal Spring Boot, o banco de dados nem a infraestrutura Kubernetes dos demais microserviços — cada um possui seu próprio repositório (ver seção [Repositórios Relacionados](#-repositórios-relacionados)).
 
 ---
 
 ## 🏗️ Arquitetura
 
-### Diagrama de Componentes
-
-![Diagrama de Componentes](docs/diagrams/Components%20-%20repo-auth-lambda-Repo_%20iac-auth-lambda.drawio.png)
-
 ### Diagrama de Sequência — Fluxo de Autenticação
 
-![Diagrama de Sequência](docs/diagrams/Sequence-authentication-uml.drawio.png)
+
 
 ### Fluxo de Login
 
@@ -94,11 +86,8 @@ Contém duas funções Lambda distintas e toda a infraestrutura associada provis
 Cliente
   │
   ▼  POST /auth/login  {cpf, senha}
-API Gateway (público)
-  │
-  ▼
-Lambda: LoginHandler
-  │  SELECT users / service_order (RDS PostgreSQL)
+Auth Service (Spring Boot :8090)
+  │  SELECT users / service_order (PostgreSQL)
   │  validação BCrypt
   ▼
 JWT HS256  {sub, role, email, iss, iat, exp}
@@ -112,29 +101,15 @@ JWT HS256  {sub, role, email, iss, iat, exp}
 ```
 Cliente
   │
-  ▼  GET /service-order   Authorization: Bearer <token>
-API Gateway
+  ▼  GET /video-upload   Authorization: Bearer <token>
+Microserviço / Ingress
   │
   ▼
-Lambda: JwtAuthorizerHandler
+Auth Service: validação JWT
   │  valida assinatura HS256 + claims (iss, exp, role)
-  ├── token válido   →  encaminha para EKS (VPC Link → NLB → Pod)
+  ├── token válido   →  encaminha para o microserviço destino
   └── token inválido →  401 Unauthorized
 ```
-
-### Outputs publicados no State Remoto
-
-| Output | Descrição |
-|--------|-----------|
-| `login_lambda_arn` | ARN da função Lambda de Login |
-| `login_lambda_name` | Nome da função de Login |
-| `authorizer_lambda_arn` | ARN da função Lambda Authorizer |
-| `authorizer_lambda_name` | Nome da função Authorizer |
-| `api_gateway_id` | ID do API Gateway |
-| `api_gateway_endpoint` | Endpoint público do API Gateway |
-| `api_gateway_execution_arn` | ARN de execução do API Gateway |
-| `vpc_link_id` | ID do VPC Link (Gateway → NLB → EKS) |
-| `api_gateway_log_group_name` | Nome do CloudWatch Log Group |
 
 ---
 
@@ -142,74 +117,58 @@ Lambda: JwtAuthorizerHandler
 
 | Tecnologia | Versão / Uso |
 |------------|--------------|
-| **Java 21** | Runtime da AWS Lambda (LTS com suporte a SnapStart) |
-| **Maven 3.9+** | Build e empacotamento do projeto (`maven-shade-plugin`) |
-| **AWS Lambda** | Funções serverless: `LoginHandler` e `JwtAuthorizerHandler` |
-| **AWS API Gateway HTTP API v2** | Roteamento público + integração VPC Link com EKS |
-| **JWT (HS256)** | Tokens de autenticação — issuer `RaceforceApi`, expiração 24h |
+| **Java 21** | Runtime da aplicação (LTS) |
+| **Spring Boot 3** | Framework principal — web, security, data JPA, actuator |
+| **Maven 3.9+** | Build e empacotamento (`maven-shade-plugin`) |
+| **JWT (HS256)** | Tokens de autenticação — issuer `auth-service`, expiração 24h |
 | **BCrypt** | Hash de senhas armazenadas no PostgreSQL |
-| **Amazon RDS PostgreSQL** | Fonte de dados para autenticação (tabelas `users` / `service_order`) |
-| **AWS SAM CLI** | Build e deploy local das Lambdas |
-| **Terraform** | Provisionamento de Lambdas, API Gateway, VPC Link e CloudWatch |
-| **Amazon S3** | Backend remoto do Terraform state (`lambda-auth/terraform.tfstate`) |
+| **PostgreSQL 16** | Fonte de dados para autenticação (tabelas `users` / `service_order`) |
+| **Flyway** | Migração e versionamento do schema do banco |
+| **Docker / Docker Compose** | Containerização e execução local |
+| **Kubernetes (local)** | Orquestração via manifests em `k8s/` (namespace `fiapx`) |
 | **New Relic** | Observabilidade: logs estruturados JSON + métricas customizadas |
-| **GitHub Actions** | Pipeline CI/CD de build, deploy e destroy automatizados |
+| **GitHub Actions** | Pipeline CI/CD de build e validação automatizados |
 
 ---
 
 ## ⚙️ Variáveis de Configuração
 
-### Variáveis de Ambiente da Lambda
+### Variáveis de Ambiente
 
 | Variável | Descrição | Exemplo |
 |----------|-----------|---------|
 | `JWT_SECRET` | Chave secreta HS256 (mínimo 32 chars) | `minha-chave-secreta-...` |
-| `JWT_ISSUER` | Emissor do token JWT | `RaceforceApi` |
+| `JWT_ISSUER` | Emissor do token JWT | `auth-service` |
 | `JWT_EXPIRATION_MS` | Expiração do token em ms | `86400000` (24h) |
-| `DB_URL` | JDBC URL do PostgreSQL | `jdbc:postgresql://host:5432/raceforce_db` |
-| `DB_USER` | Usuário do banco | `postgres` |
-| `DB_PASSWORD` | Senha do banco | *(via Secrets Manager)* |
-| `DB_POOL_SIZE` | Tamanho do pool de conexões | `3` |
+| `SPRING_DATASOURCE_URL` | JDBC URL do PostgreSQL | `jdbc:postgresql://host:5432/auth_db` |
+| `SPRING_DATASOURCE_USERNAME` | Usuário do banco | `postgres` |
+| `SPRING_DATASOURCE_PASSWORD` | Senha do banco | *(via secret k8s / .env)* |
+| `SERVER_PORT` | Porta HTTP da aplicação | `8090` |
+| `SPRING_PROFILES_ACTIVE` | Perfil ativo | `docker` ou `k8s` |
 
-### Terraform — `terraform/terraform.tfvars`
+### Docker Compose — `.env`
 
-```hcl
-# terraform/terraform.tfvars
-
-aws_region         = "us-east-1"
-project_identifier = "fiap-14soat-fase5-raceforce"
-
-# Remote states (infra e banco)
-infra_terraform_state_bucket = "fiap-14soat-fase5-jonasfschuh"
-banco_terraform_state_bucket = "fiap-14soat-fase5-jonasfschuh"
-
-# Lambda
-lambda_runtime     = "java21"
-lambda_timeout     = 30
-lambda_memory_size = 512
-lambda_enable_vpc  = true
-
-# JWT
-jwt_issuer        = "RaceforceApi"
-jwt_expiration_ms = 86400000
-
-# Segredos — nunca commitar!
-# jwt_key       = via TF_VAR_jwt_key
-# db_password   = via TF_VAR_db_password
-# new_relic_account_id  = via TF_VAR_new_relic_account_id
-# new_relic_license_key = via TF_VAR_new_relic_license_key
+```dotenv
+JWT_SECRET=dev-secret-change-in-production-min-32-chars
 ```
 
-### Secrets e Variáveis para CI/CD (GitHub Actions)
+> O `docker-compose.yml` sobe automaticamente o PostgreSQL (`postgres-auth:5432`) e o `auth-api` na porta `8090`.
+
+### Kubernetes — ConfigMap e Secrets
+
+| Recurso | Chave | Descrição |
+|---------|-------|-----------|
+| ConfigMap `auth-config` | `SERVER_PORT`, `JWT_ISSUER`, `JWT_EXPIRATION_MS`, `SPRING_*`, `LOGGING_*` | Configurações não-sensíveis |
+| Secret `jwt-secret` | `JWT_SECRET` | Chave de assinatura JWT |
+| Secret `postgres-auth-secret` | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Credenciais do banco |
+
+### Secrets para CI/CD (GitHub Actions)
 
 | Secret / Variable | Descrição |
 |-------------------|-----------|
-| `AWS_ACCESS_KEY_ID` | Credencial AWS Academy |
-| `AWS_SECRET_ACCESS_KEY` | Credencial AWS Academy |
-| `AWS_SESSION_TOKEN` | Token de sessão AWS Academy |
 | `TF_VAR_JWT_KEY` | Chave secreta do JWT |
 | `TF_VAR_DB_PASSWORD` | Senha do PostgreSQL |
-| `NEW_RELIC_KEY` | Chave de licença New Relic (`TF_VAR_new_relic_license_key`) |
+| `NEW_RELIC_KEY` | Chave de licença New Relic |
 | `NEW_RELIC_ACCOUNT_ID` | Account ID New Relic |
 
 ---
@@ -218,12 +177,12 @@ jwt_expiration_ms = 86400000
 
 As regras abaixo foram aplicadas em todos os repositórios da stack para atender ao requisito do Tech Challenge:
 
-> *"Branch main protegida (sem commits diretos). Uso obrigatório de Pull Requests para merge. Deploy automático das branches de produção."*
+> *"Branch main protegida (sem commits diretos). Uso obrigatório de Pull Requests para merge."*
 
 | Regra | Valor |
 |---|---|
 | **Require a pull request before merging** | ✅ Ativado — bloqueia commits diretos na `main` |
-| **Required approvals** | `1` revisão obrigatória antes do merge (OBS: no caso desse estudo desabilitado que tem 1 pessoa no grupo) |
+| **Required approvals** | `1` revisão obrigatória antes do merge (OBS: desabilitado neste estudo com 1 pessoa no grupo) |
 | **Dismiss stale reviews on new commits** | ✅ Ativado — revalida aprovação se o PR for atualizado |
 | **Require status checks to pass** | ✅ Ativado — bloqueia merge se o PR Validation falhar |
 | **Require branches to be up to date** | ✅ Ativado — evita merge de branch desatualizada |
@@ -233,27 +192,9 @@ As regras abaixo foram aplicadas em todos os repositórios da stack para atender
 
 | Check | Job |
 |---|---|
-| `build-and-test` | Build Maven + testes unitários da Lambda |
-| `terraform-validation` | Valida `terraform init` e `validate` na pasta `terraform/` |
+| `build-and-test` | Build Maven + testes unitários (`./mvnw verify`) |
 
 > ⚠️ O status check só aparece para seleção no GitHub após a **primeira execução bem-sucedida** do PR Validation.
-
----
-
-## 🕹️ Deploy Manual — Decisão de Projeto (AWS Academy)
-
-> *"Por que o deploy não é acionado automaticamente a cada `push` para `main`?"*
-
-Os workflows de deploy desta stack utilizam `workflow_dispatch` (disparo manual) de forma **intencional e justificada**. Essa decisão foi tomada em razão da **natureza efêmera do ambiente AWS Academy**:
-
-- Cada sessão do AWS Academy possui um limite de **4 horas** de execução ativa;
-- As credenciais (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) expiram ao fim de cada sessão e precisam ser renovadas manualmente;
-- Um trigger automático a cada `push` para `main` **recriaria toda a infraestrutura a cada commit**, consumindo rapidamente o budget de horas disponível;
-- A recriação automática de recursos como **Lambda Functions, API Gateway e VPC Link** dentro do ciclo de 4 horas tornaria inviável o uso contínuo da plataforma para demonstração e validação acadêmica.
-
-**O deploy é iniciado manualmente pelo autor** via *GitHub Actions → Run workflow*, garantindo controle total sobre quando os recursos são provisionados e consumindo o budget de forma consciente e responsável.
-
-> 💡 **Endpoint de produção:** O endpoint do API Gateway é gerado dinamicamente pelo Terraform a cada deploy e **não possui um valor fixo** — o AWS Academy recria os recursos a cada nova sessão. O endpoint ativo é exibido automaticamente no **GitHub Actions Summary** após cada execução bem-sucedida do workflow de deploy.
 
 ---
 
@@ -263,95 +204,81 @@ Os workflows de deploy desta stack utilizam `workflow_dispatch` (disparo manual)
 
 - [Java 21](https://adoptium.net/)
 - [Maven 3.9+](https://maven.apache.org/)
-- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.3
-- [AWS CLI](https://aws.amazon.com/cli/) configurado (`aws configure`)
-- RDS PostgreSQL provisionado (repositório `iac-database`) e acessível
+- [Docker](https://www.docker.com/) e Docker Compose
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) (para deploy em k8s local)
 
-### Opção A — Deploy via Terraform (CI/CD recomendado)
-
-#### 1. Build do JAR
+### Opção A — Docker Compose (desenvolvimento local)
 
 ```bash
-cd src/auth-lambda
-mvn clean package -DskipTests
+# Crie o arquivo .env (ou edite o valor padrão no docker-compose.yml)
+cp .env.example .env
+
+# Suba PostgreSQL + auth-api
+docker compose up --build
 ```
 
-#### 2. Inicializar o Terraform
+A API ficará disponível em `http://localhost:8090`.
+
+### Opção B — Kubernetes local
 
 ```bash
-cd ../../terraform
-terraform init
+# Build da imagem local (sem push para registry)
+docker build -t auth-api:latest .
+
+# Crie os secrets antes de aplicar os manifests
+kubectl create secret generic jwt-secret \
+  --from-literal=JWT_SECRET=<sua-chave-secreta> \
+  -n fiapx
+
+kubectl create secret generic postgres-auth-secret \
+  --from-literal=SPRING_DATASOURCE_URL=jdbc:postgresql://<host>:5432/auth_db \
+  --from-literal=SPRING_DATASOURCE_USERNAME=postgres \
+  --from-literal=SPRING_DATASOURCE_PASSWORD=<senha> \
+  -n fiapx
+
+# Aplique os manifests
+kubectl apply -f k8s/
 ```
 
-#### 3. Planejar e aplicar
-
-```bash
-terraform plan -out tfplan
-terraform apply tfplan
-```
-
-#### 4. Obter o endpoint do API Gateway
-
-```bash
-terraform output api_gateway_endpoint
-```
-
-#### 5. Destruir (economia de budget no AWS Academy)
-
-```bash
-terraform destroy
-```
-
-### Opção B — Deploy via AWS SAM (desenvolvimento local)
-
-#### 1. Build e validação
-
-```bash
-cd src/auth-lambda
-mvn clean package
-sam validate --template-file template.yaml
-sam build --template-file template.yaml
-```
-
-#### 2. Deploy guiado
-
-```bash
-sam deploy --guided --template-file template.yaml
-```
+O serviço fica exposto como `ClusterIP` na porta `8090` dentro do namespace `fiapx`.
 
 ### Testes Unitários
 
 ```bash
-cd src/auth-lambda
-mvn clean test
+./mvnw clean test
 ```
 
-### Ordem de Deploy da Stack Completa
+### Testes com cobertura completa
+
+```bash
+./mvnw verify
+```
+
+### Ordem de Deploy da Stack Completa (k8s local)
 
 | # | Repositório | Descrição |
 |---|-------------|-----------|
-| 1 | fiap-14soat-tc-fase5-iac-terraform | VPC, EKS, NLB, S3, IAM |
-| 2 | fiap-14soat-tc-fase5-iac-database | RDS PostgreSQL |
-| 3 | **fiap-14soat-tc-fase5-auth-lambda** ← este | Lambda Login + Authorizer + API Gateway |
-| 4 | fiap-14soat-tc-fase5-app-k8s | Aplicação + manifests K8s |
+| 1 | fiap-14soat-tc-fase5-iac-terraform | VPC, EKS, NLB — infraestrutura base |
+| 2 | fiap-14soat-tc-fase5-iac-database | PostgreSQL |
+| 3 | **fiap-14soat-tc-fase5-auth** ← este | Auth Service Spring Boot |
+| 4 | fiap-14soat-tc-fase5-app-k8s | Demais microserviços + manifests K8s |
 
 ---
 
 ## 🔐 Observações de Segurança
 
-- **Nunca** comite `JWT_SECRET`, `DB_PASSWORD` ou `jwt_key` em texto puro no repositório;
-- Em produção, injete segredos via **AWS Secrets Manager** ou **SSM Parameter Store**;
-- Com `lambda_enable_vpc = true`, as Lambdas executam dentro da VPC com acesso restrito ao RDS;
-- O catch-all `ANY /{proxy+}` não possui autenticação — rotas sensíveis devem ser explicitamente adicionadas às rotas protegidas.
+- **Nunca** comite `JWT_SECRET` ou `SPRING_DATASOURCE_PASSWORD` em texto puro no repositório;
+- Em k8s, injete segredos via `kubectl create secret` ou um gerenciador de secrets (ex.: Sealed Secrets, Vault);
+- O arquivo `.env` está no `.gitignore` — use `.env.example` como referência;
+- Rotas sensíveis devem ser explicitamente declaradas como protegidas no filtro JWT da aplicação.
 
-> 💡 **Acesso acadêmico (AWS Academy):** o ambiente pode conter o usuário de teste `admin / admin123` exclusivamente para validação do Tech Challenge. **Remova em produção.**
+> 💡 O ambiente pode conter o usuário de teste `admin / admin123` exclusivamente para validação do Tech Challenge. **Remova em produção.**
 
 ---
 
 ## 📈 Observabilidade
 
-Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenticação:
+Logs estruturados JSON e métricas via Spring Boot Actuator + Prometheus em cada requisição de autenticação:
 
 | Campo | Descrição |
 |-------|-----------|
@@ -359,7 +286,16 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 | `authResult` | `SUCCESS` ou `FAILURE` |
 | `reason` | Motivo da falha (quando aplicável) |
 | `latencyMs` | Latência da operação |
-| `correlationId` | Header `X-Correlation-Id` ou `awsRequestId` |
+| `correlationId` | Header `X-Correlation-Id` da requisição |
+
+**Endpoints de Actuator expostos:**
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `GET /actuator/health` | Health check geral |
+| `GET /actuator/health/liveness` | Liveness probe (k8s) |
+| `GET /actuator/health/readiness` | Readiness probe (k8s) |
+| `GET /actuator/prometheus` | Métricas no formato Prometheus |
 
 **Métricas customizadas** no namespace `Raceforce/Auth`:
 
@@ -375,14 +311,13 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 
 | Tipo | Arquivo | Descrição |
 |------|---------|-----------|
-| 📋 RFC | [RFC-001 — Autenticação Serverless com AWS Lambda e JWT](docs/RFC%20-%20Requests%20for%20Comments/RFC-001-autenticacao-serverless.md) | Justificativa técnica da estratégia de autenticação |
-| 🏛️ ADR | [ADR-001 — Lambda Authorizer para Proteção de Rotas](docs/ADR%20-%20Architecture%20Decision%20Records/ADR-001-lambda-authorizer.md) | Decisão arquitetural: Lambda Authorizer no API Gateway |
-| 🖼️ Diagrama Componentes | [Components-repo-auth-lambda.drawio.png](docs/diagrams/Components-repo-auth-lambda.png) | O que este repositório provisiona na AWS |
-| 🔄 Diagrama de Sequência | [Sequence-authentication-uml.drawio.png](docs/diagrams/Sequence-authentication-uml.drawio.png) | Fluxo de autenticação: Cliente → API GW → Lambda → RDS → JWT |
+| 📋 RFC | [RFC-001 — Autenticação com JWT](docs/RFC%20-%20Requests%20for%20Comments/RFC-001-autenticacao-serverless.md) | Justificativa técnica da estratégia de autenticação |
+| 🏛️ ADR | [ADR-001 — Authorizer para Proteção de Rotas](docs/ADR%20-%20Architecture%20Decision%20Records/ADR-001-lambda-authorizer.md) | Decisão arquitetural: validação JWT no filtro Spring Security |
+| 🔄 Diagrama de Sequência | [Sequence-authentication-uml.drawio.png](docs/diagrams/Sequence-authentication-uml.drawio.png) | Fluxo de autenticação: Cliente → Auth Service → PostgreSQL → JWT |
 
-> ℹ️ **Swagger / OpenAPI:** este repositório expõe dois endpoints públicos documentados abaixo. A documentação completa da API REST da aplicação está no repositório [fiap-14soat-tc-fase5-app-k8s](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-app-k8s).
+> ℹ️ **Swagger / OpenAPI:** a documentação interativa está disponível em `http://localhost:8090/swagger-ui.html` com a aplicação em execução.
 
-### Endpoints da Lambda
+### Endpoints da API
 
 #### `POST /auth/login`
 
@@ -395,7 +330,7 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 
 // Response 200
 {
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "token": "<jwt>",
   "role": "USER",
   "expiresIn": 86400000,
   "username": "João Silva"
@@ -432,19 +367,16 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 
 ## 🔗 Repositórios Relacionados
 
-| Ordem | Repositório | Descrição |
-|-------|-------------|-----------|
-| 1 | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | VPC, EKS, NLB, S3, IAM — infraestrutura base |
-| 2 | [fiap-14soat-tc-fase5-iac-database](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-database) | RDS PostgreSQL |
-| 3 | [fiap-14soat-tc-fase5-auth-lambda](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda) | **Este repositório** — Lambda Login + Authorizer + API Gateway |
-| 4 | [fiap-14soat-tc-fase5-customer](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-customer) | Microserviço Customer |
-| 5 | [fiap-14soat-tc-fase5-vehicle](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-vehicle) | Microserviço Vehicle |
-| 6 | [fiap-14soat-tc-fase5-stocks](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-stocks) | Microserviço Stocks |
-| 7 | [fiap-14soat-tc-fase5-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service) | Microserviço Service |
-| 8 | [fiap-14soat-tc-fase5-purchase-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-purchase-order) | Microserviço Purchase Order |
-| 9 | [fiap-14soat-tc-fase5-billing](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-billing) | Microserviço Billing |
-| 10 | [fiap-14soat-tc-fase5-service-order](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-service-order) | Microserviço Service Order |
-| 11 | [fiap-14soat-tc-fase5-app-k8s](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-app-k8s) | Aplicação Spring Boot + manifests K8s |
+| Ordem | Repositório | Descrição                   |
+|-------|-------------|-----------------------------|
+| 1 | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | Banco de dados, RabbitMQ — infraestrutura AWS |
+| 2 | [fiap-14soat-tc-fase5-auth](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth) | Login Authorizer            |
+| 3 | [fiap-14soat-tc-fase5-video-upload-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-upload-service) | Upload + RabbitMQ publisher |
+| 4 | [fiap-14soat-tc-fase5-video-processing-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-processing-service) | Processa vídeo, extrai frames, gera ZIP |
+| 5 | [fiap-14soat-tc-fase5-video-status-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-status-service) | Status e metadados dos vídeos por usuário |
+| 6 | [fiap-14soat-tc-fase5-video-download-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-download-service) | Download do ZIP via presigned URL |
+| 7 | [fiap-14soat-tc-fase5-notification-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-notification-service) | Notificação por e-mail em caso de erro/conclusão |
+| 8 | [fiap-14soat-tc-fase5-observability](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-observability) | Prometheus + Grafana — dashboards e alertas |
 
 ---
 
@@ -454,6 +386,6 @@ Logs estruturados JSON no CloudWatch e New Relic em cada requisição de autenti
 
 *Projeto Acadêmico — Pós-Graduação em Arquitetura de Software · FIAP 2025/2026*
 
-[⬆ Voltar ao topo](#fiap-14soat-tc-fase5-auth-lambda)
+[⬆ Voltar ao topo](#fiap-14soat-tc-fase5-auth)
 
 </div>
