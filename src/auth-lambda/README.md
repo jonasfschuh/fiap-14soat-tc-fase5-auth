@@ -1,13 +1,13 @@
-# Auth Lambda
+﻿# Auth Service
 
-Projeto Java 21 para AWS Lambda com login JWT e Lambda Authorizer.
+Módulo Java 21 com Spring Boot 3 para autenticação JWT da plataforma RaceForce.
 
 ## Estrutura
 
 ```text
 src/auth-lambda/
   pom.xml
-  template.yaml
+  template.yaml   (legado — mantido para referência histórica)
   README.md
   src/main/java/br/com/fiap/authlambda/
   src/test/java/br/com/fiap/authlambda/
@@ -17,42 +17,26 @@ src/auth-lambda/
 
 - Java 21
 - Maven 3.9+
-- AWS SAM CLI
-- PostgreSQL acessível pela Lambda
+- PostgreSQL acessível pela aplicação
 
-## Variáveis de ambiente / parâmetros
+## Variáveis de ambiente
 
 - `JWT_SECRET`
 - `JWT_ISSUER`
 - `JWT_EXPIRATION_MS`
-- `DB_URL`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_POOL_SIZE`
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SERVER_PORT`
 
 ## Build e testes
 
-```powershell
+```bash
 mvn clean test
 mvn clean package
 ```
 
-## Validação do template SAM
-
-```powershell
-sam validate --template-file template.yaml
-sam build --template-file template.yaml
-```
-
-## Deploy
-
-Exemplo com parâmetros explícitos:
-
-```powershell
-sam deploy --guided --template-file template.yaml
-```
-
 ## Observação de segurança
 
-Os segredos não devem ser hardcoded. Em ambiente real, prefira injetar `JWT_SECRET` e credenciais do banco via AWS Secrets Manager ou SSM Parameter Store.
-
+Os segredos não devem ser hardcoded. Injete `JWT_SECRET` e credenciais do banco via
+variáveis de ambiente, secrets do Kubernetes ou um gerenciador de secrets (ex.: Vault, Sealed Secrets).
