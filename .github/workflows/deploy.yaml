@@ -77,6 +77,13 @@ jobs:
           print(f"Tests: {total} total, {success} ok, {failures} fail | Coverage: {coverage:.2f}%")
           PY
 
+      - name: Upload JAR para deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: infrastructure/target/auth-service-*.jar
+          retention-days: 1
+
       - name: Upload artefatos de cobertura
         uses: actions/upload-artifact@v4
         if: always()
@@ -97,6 +104,12 @@ jobs:
         shell: powershell
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download JAR compilado
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: infrastructure/target/
 
       - name: Build Docker image
         run: |
