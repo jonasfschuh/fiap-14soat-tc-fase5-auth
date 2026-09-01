@@ -88,12 +88,13 @@ jobs:
 
   deploy:
     name: 2. Build Docker & Deploy K8s Local
-    runs-on: self-hosted
+    # Runner Windows local com Docker Desktop e kubectl configurado
+    runs-on: [self-hosted, Windows, X64]
     needs: build-and-test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
-        shell: bash
+        shell: powershell
     steps:
       - uses: actions/checkout@v4
 
@@ -103,22 +104,34 @@ jobs:
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
 
       - name: Garantir namespace fiapx
-        run: kubectl get namespace ${{ env.K8S_NAMESPACE }} >/dev/null 2>&1 || kubectl create namespace ${{ env.K8S_NAMESPACE }}
+        run: |
+          kubectl get namespace ${{ env.K8S_NAMESPACE }} 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            kubectl create namespace ${{ env.K8S_NAMESPACE }}
+          }
 
       - name: Deploy no Kubernetes (Docker Desktop)
         run: kubectl apply -f k8s/ -n ${{ env.K8S_NAMESPACE }}
 
       - name: Aguardar rollout
-        run: kubectl rollout restart deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }} && kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }} --timeout=180s
+        run: |
+          kubectl rollout restart deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }} --timeout=180s
 
       - name: Diagnostico em caso de falha
         if: failure()
         run: |
-          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} || true
-          kubectl describe pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} || true
-          for pod in $(kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
-            echo "===== Logs: $pod =====" && kubectl logs "$pod" -n ${{ env.K8S_NAMESPACE }} --tail=100 || true
-          done
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }}
+          kubectl describe pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }}
+          $pods = kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} `
+            -o jsonpath='{.items[*].metadata.name}' 2>$null
+          if ($pods) {
+            foreach ($pod in ($pods -split '\s+')) {
+              Write-Host "===== Logs: $pod ====="
+              kubectl logs $pod -n ${{ env.K8S_NAMESPACE }} --tail=100
+            }
+          }
 
   summary:
     name: 3. Sumario
