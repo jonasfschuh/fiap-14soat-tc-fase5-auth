@@ -1,0 +1,12 @@
+# Configuracoes especificas para deploy no cluster Kubernetes local.
+# Ativo quando SPRING_PROFILES_ACTIVE=k8s (definido no ConfigMap auth-config).
+
+springdoc:
+  swagger-ui:
+    # O Swagger UI roda no browser, que faz requisicoes com paths absolutos.
+    # Com a ingress reescrevendo /auth/** -> /**, precisamos apontar para
+    # os paths completos (com /auth) para que o browser roteie corretamente.
+    config-url: /auth/v3/api-docs/swagger-config
+    url: /auth/v3/api-docs
+  api-docs:
+    path: /v3/api-docs
