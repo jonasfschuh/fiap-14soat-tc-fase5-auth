@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
  * Expõe os endpoints REST do fluxo de autenticação.
  */
 @RestController
-@RequestMapping("/auth")
 public class AuthController {
 
     private final AuthenticationInputPort authenticationInputPort;
