@@ -81,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: infrastructure/target/auth-service-*.jar
+          path: application/target/auth-service-application-*-exec.jar
           retention-days: 1
 
       - name: Upload artefatos de cobertura
@@ -109,7 +109,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: app-jar
-          path: infrastructure/target/
+          path: application/target/
 
       - name: Build Docker image
         run: |
