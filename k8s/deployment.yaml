@@ -91,6 +91,11 @@ spec:
                 configMapKeyRef:
                   name: auth-config
                   key: LOGGING_LEVEL_ROOT
+            - name: SWAGGER_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: SWAGGER_SERVER_URL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

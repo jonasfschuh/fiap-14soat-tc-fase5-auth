@@ -1,91 +1,119 @@
-﻿# ADR-001 — Uso de Lambda Authorizer para Proteção de Rotas no API Gateway
+# ADR-001 — Autenticação JWT embutida no serviço `auth` (Spring Security), sem AWS Lambda
 
-| Campo        | Valor                                                          |
-|--------------|----------------------------------------------------------------|
-| **ADR**      | 001                                                            |
-| **Título**   | Lambda Authorizer como mecanismo de autorização no API Gateway |
-| **Repositório** | fiap-14soat-tc-fase5-auth-lambda                               |
-| **Status**   | Aceito                                                         |
-| **Data**     | 2026-04-20                                                     |
-| **Decisores**| Time FIAP 14SOAT Fase 5                                       |
+| Campo        | Valor                                                                     |
+|--------------|-----------------------------------------------------------------------------|
+| **ADR**      | 001                                                                       |
+| **Título**   | Filtro Spring Security (`JwtAuthenticationFilter`) como mecanismo de autenticação/autorização |
+| **Repositório** | fiap-14soat-tc-fase5-auth                                                |
+| **Status**   | Aceito — **revisado em 2026-09-10** (substitui a versão anterior baseada em AWS Lambda) |
+| **Data**     | 2026-04-20 (criado) · 2026-09-10 (revisado para a realidade 100% local)   |
+| **Decisores**| Time FIAP 14SOAT Fase 5                                                   |
+
+---
+
+## ⚠️ Nota sobre a revisão
+
+A versão original deste ADR descrevia um **Lambda Authorizer da AWS** validando tokens no **API Gateway**. Essa arquitetura **não reflete mais o projeto**: não há conta AWS, API Gateway ou Cognito envolvidos. Toda a plataforma roda em um **cluster Kubernetes local (Docker Desktop)**, provisionado via Terraform (`fiap-14soat-tc-fase5-iac-terraform`), com **NGINX Ingress** como único ponto de entrada (ver ADR-003 do `iac-terraform`).
+
+O código Java do antigo Lambda Authorizer ainda existe no repositório em `src/auth-lambda/`, mas está marcado explicitamente no seu próprio `README.md` como **"legado — mantido para referência histórica"** e não é mais implantado nem invocado por nenhum componente ativo da solução.
 
 ---
 
 ## Contexto
 
-O API Gateway HTTP API v2 precisa de um mecanismo para validar tokens JWT antes de encaminhar requisições ao cluster EKS. As opções disponíveis no API Gateway são:
+O serviço `auth` (Spring Boot 3 / Java 21) precisa validar credenciais e emitir/validar tokens JWT para proteger as rotas dos demais microsserviços (`video-upload`, `video-processing`, `video-status`, `video-download`, `notification`), todos expostos atrás do mesmo Ingress NGINX no cluster local.
 
-1. **JWT Authorizer nativo** (built-in do API Gateway);
-2. **Lambda Authorizer** (função customizada);
-3. **Sem autorização** (authorization_type = NONE).
+As opções avaliadas para validar o token em cada requisição foram:
 
-Adicionalmente, a equipe já precisava de uma Lambda para o fluxo de **login** (geração de JWT), tornando vantajoso centralizar autenticação e autorização no mesmo repositório serverless.
+1. **Filtro Spring Security dentro de cada microsserviço** (cada serviço valida o JWT localmente);
+2. **Filtro Spring Security centralizado apenas no serviço `auth`**, que expõe `/login` e `/validate`, delegando a validação a quem consumir o endpoint;
+3. ~~AWS Lambda Authorizer + API Gateway~~ — descartado por não existir mais infraestrutura AWS no projeto.
 
 ---
 
 ## Decisão
 
-**Utilizar Lambda Authorizer customizado** (`JwtAuthorizerHandler` em Java 21) para validar tokens JWT em todas as rotas protegidas do API Gateway.
+**Implementar um `JwtAuthenticationFilter` (`OncePerRequestFilter`) dentro do próprio serviço `auth`**, registrado na cadeia do Spring Security (`SecurityConfiguration`), responsável por:
+
+- Extrair o header `Authorization: Bearer <token>`;
+- Validar a assinatura HS256 do JWT via `JwtTokenAdapter`;
+- Popular o `SecurityContextHolder` com o `username` e a `role` extraídos das claims do token;
+- Rejeitar com `401` requisições com token ausente/inválido nas rotas protegidas.
+
+O serviço expõe dois endpoints REST principais:
+- `POST /login` — autentica usuário/senha e retorna `{ token, username, role }`;
+- `GET /validate` — valida o token do header `Authorization` e retorna `{ valid, username, role }` (usado por outros serviços/gateway para checagem pontual, se necessário).
+
+O serviço roda como um `Deployment` Kubernetes (`k8s/deployment.yaml`), exposto internamente na porta `8090`, atrás do path `/auth` no Ingress NGINX do cluster local.
 
 ---
 
 ## Justificativa
 
-| Critério | JWT Authorizer nativo | Lambda Authorizer (escolhido) |
-|----------|----------------------|-------------------------------|
-| Controle sobre validação | Limitado (apenas issuer/audience) | Total (claims, role, expiração customizada) |
-| Lógica de negócio | Não suporta | Suporta (ex: verificar se usuário ainda existe no banco) |
-| Performance | Melhor (sem cold start) | Cold start Java ~2s (mitigável com SnapStart) |
-| Custo | Sem custo adicional | Invocações Lambda (free tier cobre o volume acadêmico) |
-| Cache de autorização | Sim (TTL configurável) | Sim (`authorizer_result_ttl_in_seconds = 300`) |
+| Critério | Filtro Spring Security no `auth` (escolhido) | AWS Lambda Authorizer (descartado) |
+|----------|-----------------------------------------------|--------------------------------------|
+| Dependência de nuvem | Nenhuma — roda 100% local no cluster Docker Desktop | Exigiria conta AWS, API Gateway e Cognito/CloudWatch |
+| Custo | Zero | Free tier Lambda, mas inexistente no escopo atual (sem AWS) |
+| Latência | Sem cold start — processo Java já ativo no Pod | Cold start Java ~2-5s na primeira invocação |
+| Simplicidade de debug | Logs locais via `kubectl logs` / New Relic | Exigiria CloudWatch Logs |
+| Alinhamento com o requisito do desafio | Atende (`"Sistema deve ser protegido por usuário e senha"`) sem exigir nuvem | Não aplicável — desafio não exige AWS |
 
-O Lambda Authorizer foi escolhido pois:
-
-- Permite validar a **assinatura HS256** com o mesmo segredo usado pelo Spring Boot;
-- Permite verificar **claims customizados** como `role` e `iss`;
-- Facilita **evolução futura** (ex: revogar tokens, checar blacklist);
-- Mantém consistência com o issuer `RaceforceApi` definido no `JWT_SECRET` compartilhado.
+O filtro Spring Security embutido foi escolhido porque:
+- Elimina qualquer dependência de infraestrutura de nuvem paga ou específica de fornecedor;
+- Mantém o fluxo de autenticação simples e testável localmente (`docker-compose`, `k8s` local);
+- Reaproveita a mesma stack (Spring Boot 3 / Java 21) usada nos demais microsserviços da solução;
+- É compatível com o requisito técnico do Hackathon de que o sistema seja "protegido por usuário e senha", sem exigir nenhum serviço gerenciado de nuvem.
 
 ---
 
 ## Consequências
 
 ### Positivas
-- Validação JWT centralizada e desacoplada da aplicação;
-- TTL de 300s no cache do Authorizer reduz invocações repetidas;
-- Logs estruturados no CloudWatch e New Relic para cada tentativa de autorização.
+- Zero dependência de AWS — toda a autenticação roda no cluster local;
+- Sem cold start — validação de token é imediata dentro do próprio processo Spring Boot;
+- Reaproveita `JWT_SECRET` compartilhado via Kubernetes Secret (`jwt-secret`) entre o serviço `auth` e os demais microsserviços que também precisem validar o token;
+- Testes unitários e de integração do filtro rodam localmente sem mocks de AWS SDK.
 
-### Negativas
-- Cold start Java 21 pode adicionar latência na primeira invocação após inatividade;
-- O `ANY /{proxy+}` (catch-all) tem `authorization_type = NONE` — rotas não mapeadas explicitamente ficam abertas. **Ação futura:** adicionar rotas restantes ao conjunto protegido.
+### Negativas / Riscos
+- Cada microsserviço que precisa validar o JWT deve implementar (ou compartilhar) sua própria lógica de validação — não há um único ponto centralizado de autorização como um API Gateway faria;
+- Sem TTL de cache de autorização como o Lambda Authorizer oferecia (`authorizer_result_ttl_in_seconds`) — cada requisição revalida o token;
+- Sem WAF/API Gateway na frente, a superfície de proteção fica no NGINX Ingress + validação de aplicação.
 
 ---
 
 ## Alternativas Consideradas
 
-### JWT Authorizer nativo
-- Não suporta segredo HS256 compartilhado diretamente (usa JWKS endpoint);
-- Sem flexibilidade para adicionar lógica de negócio futura.
+### AWS Lambda Authorizer + API Gateway (arquitetura original, revogada)
+- Adequada em um cenário com conta AWS ativa (ex.: AWS Academy);
+- Sem essa infraestrutura disponível no projeto atual, tornou-se inviável e foi substituída;
+- Código mantido em `src/auth-lambda/` apenas como referência histórica, sem uso ativo.
 
-### Sem autorização (NONE em todas as rotas)
-- Inaceitável: exporia dados sensíveis de clientes e ordens de serviço publicamente.
+### Validação de JWT replicada em cada microsserviço (sem endpoint central `/validate`)
+- Evitaria uma chamada de rede extra ao serviço `auth`;
+- Rejeitada por hora: manter o `auth` como fonte única de emissão/validação simplifica a rotação de segredo (`JWT_SECRET`) e a auditoria de login.
 
 ---
 
 ## Notas de Implementação
 
 ```java
-// JwtAuthorizerHandler.java
-public APIGatewayV2CustomAuthorizerResponse handleRequest(
-    APIGatewayV2CustomAuthorizerEvent event, Context context) {
-    String token = extrairBearer(event.getHeaders().get("authorization"));
-    boolean valido = jwtService.validar(token);
-    return buildResponse(valido, extrairSub(token));
+// JwtAuthenticationFilter.java — infrastructure/adapters/security
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) {
+        String token = extrairBearer(request.getHeader("Authorization"));
+        if (!jwtTokenAdapter.validate(token)) {
+            response.sendError(SC_UNAUTHORIZED, "Token inválido.");
+            return;
+        }
+        // popula SecurityContextHolder com username + role extraídos do token
+        chain.doFilter(request, response);
+    }
 }
 ```
 
-- Handler: `br.com.fiap.authlambda.handler.JwtAuthorizerHandler::handleRequest`
-- Runtime: Java 21
-- TTL cache: 300s
-- Simple responses habilitado (`enable_simple_responses = true`)
+- Porta do serviço: `8090` (ver `k8s/deployment.yaml`, `infra/ingress.tf` no `iac-terraform`);
+- Segredo `JWT_SECRET` publicado como Kubernetes Secret (`jwt-secret`) pelo `iac-terraform` e consumido também pelos demais microsserviços;
+- Banco de dados dedicado `auth_db` (Flyway) — ver ADR-004 do `iac-terraform`.
 
+**ADR relacionado:** ADR-003 (Ingress NGINX local) e ADR-004 (Banco de dados local por serviço), ambos em `iac-terraform`.

@@ -28,6 +28,10 @@ auth:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
     issuer: ${JWT_ISSUER:auth-service}
 
+swagger:
+  server:
+    url: ${SWAGGER_SERVER_URL:/}
+
 management:
   endpoints:
     web:

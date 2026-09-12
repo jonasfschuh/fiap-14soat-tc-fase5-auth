@@ -78,7 +78,9 @@ Expõe dois endpoints principais:
 
 ### Diagrama de Sequência — Fluxo de Autenticação
 
+O fluxo completo (login → validação → emissão do JWT) corresponde às etapas 01 a 03 do diagrama de fluxo processual consolidado no repositório de infraestrutura:
 
+![Fluxo Processual](https://raw.githubusercontent.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform/main/docs/diagrams/process-flow.png)
 
 ### Fluxo de Login
 
@@ -311,9 +313,10 @@ Logs estruturados JSON e métricas via Spring Boot Actuator + Prometheus em cada
 
 | Tipo | Arquivo | Descrição |
 |------|---------|-----------|
-| 📋 RFC | [RFC-001 — Autenticação com JWT](docs/RFC%20-%20Requests%20for%20Comments/RFC-001-autenticacao-serverless.md) | Justificativa técnica da estratégia de autenticação |
-| 🏛️ ADR | [ADR-001 — Authorizer para Proteção de Rotas](docs/ADR%20-%20Architecture%20Decision%20Records/ADR-001-lambda-authorizer.md) | Decisão arquitetural: validação JWT no filtro Spring Security |
-| 🔄 Diagrama de Sequência | [Sequence-authentication-uml.drawio.png](docs/diagrams/Sequence-authentication-uml.drawio.png) | Fluxo de autenticação: Cliente → Auth Service → PostgreSQL → JWT |
+| 📋 RFC | [RFC-001 — Autenticação com JWT](docs/RFC%20-%20Requests%20for%20Comments/RFC-001-autenticacao-serverless.md) | Justificativa técnica da estratégia de autenticação local (Spring Boot + JWT), substitui a proposta anterior baseada em AWS Lambda |
+| 🏛️ ADR | [ADR-001 — Authorizer para Proteção de Rotas](docs/ADR%20-%20Architecture%20Decision%20Records/ADR-001-lambda-authorizer.md) | Decisão arquitetural: validação JWT no filtro Spring Security (`JwtAuthenticationFilter`), sem AWS Lambda |
+
+> ℹ️ O diagrama de sequência do fluxo de autenticação (Cliente → Auth Service → PostgreSQL → JWT) faz parte da documentação consolidada de arquitetura no repositório de infraestrutura: veja [`process-flow.png`](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform/blob/main/docs/diagrams/process-flow.png) e o [RFC-004 — Arquitetura Geral e Fluxo de Mensageria](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform/blob/main/docs/RFC%20-%20Requests%20for%20Comments/RFC-004-arquitetura-geral-e-fluxo-de-mensageria.md).
 
 > ℹ️ **Swagger / OpenAPI:** a documentação interativa está disponível em `http://localhost:8090/swagger-ui.html` com a aplicação em execução.
 
