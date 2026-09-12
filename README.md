@@ -364,7 +364,7 @@ Logs estruturados JSON e métricas via Spring Boot Actuator + Prometheus em cada
 | Fase 2 | [Apresentação Tech Challenge 2 — RaceForce](https://youtu.be/95ml0-H9Vf4) |
 | Fase 3 | [Apresentação Tech Challenge 3 — RaceForce](https://www.youtube.com/watch?v=KB-FC_4zsPE) |
 | Fase 4 | [Apresentação Tech Challenge 4 — RaceForce](https://www.youtube.com/watch?v=vR3x4kW0l90) |
-| Fase 5 | *(em breve)* |
+| Fase 5 | [Apresentação Tech Challenge 5 — RaceForce](https://youtu.be/PFs5ekuUxxM) |
 
 ---
 
